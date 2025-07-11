@@ -12,6 +12,8 @@ from config import GROUP_ID, GROUP_INVITE_LINK
 from handlers.nutrition_handler import send_daily_summary
 import re
 
+
+
 # Київська часова зона
 KYIV_TZ = pytz.timezone("Europe/Kiev")
 
@@ -19,6 +21,8 @@ def get_current_kyiv_time():
     """Повертає поточний час за київською часовою зоною."""
     return datetime.now(KYIV_TZ)
 
+
+# Словник для надійного перекладу днів тижня, незалежно від локалі системи
 DAY_MAP = {
     "Monday": "Понеділок",
     "Tuesday": "Вівторок",
@@ -74,7 +78,76 @@ async def send_daily_reminder(bot: Bot):
     for user_id, *_ in users:
         await send_today_workout_for_user(user_id, bot, is_reminder=True)
 
-# Усі інші функції залишаються незмінними, окрім тих, де є datetime.now()
+async def ask_for_weekly_feedback(bot: Bot):
+    users = await db.get_all_active_users()
+    feedback_text = "🗓️ **Час для тижневого відгуку!**\n\nЯк ви оцінюєте складність тренувань минулого тижня? (де 1 - дуже легко, 5 - дуже важко)"
+    for user_id, *_ in users:
+        try:
+            await send_message_safely(bot, user_id, feedback_text, reply_markup=kb.feedback_kb)
+        except Exception as e:
+            print(f"Не вдалося надіслати тижневий відгук користувачу {user_id}: {e}")
+
+async def send_monthly_report(bot: Bot):
+    users = await db.get_all_active_users()
+    for user_data in users:
+        try:
+            user_id = user_data[0]
+            reg_date_str = user_data[1] if len(user_data) > 1 else None
+
+            if not reg_date_str: continue
+            reg_date = datetime.fromisoformat(reg_date_str)
+            if datetime.now() - reg_date > timedelta(days=30):
+                await achievements.check_and_grant_achievement(user_id, 'marathoner', bot)
+            
+            total_workouts = await db.count_total_workouts(user_id)
+            last_30_days = await db.count_workouts_last_n_days(user_id, 30)
+            report_text = (f"📅 **Ваш звіт за місяць!**\n\nВи чудово попрацювали! Ось ваша статистика:\n🔸 Тренувань за останній місяць: **{last_30_days}**\n🔸 Всього тренувань з ботом: **{total_workouts}**\n\nНовий місяць - нові вершини! Не зупиняйтесь!")
+            await send_message_safely(bot, user_id, report_text)
+        except Exception as e:
+            print(f"Не вдалося надіслати місячний звіт користувачу {user_id}: {e}")
+
+async def post_weekly_leaderboard(bot: Bot):
+    if not GROUP_ID: return
+    top_users = await db.get_top_users_by_workouts(limit=3)
+    if not top_users: return
+    leaderboard_text = "🏆 **Щотижневий Лідерборд!** 🏆\n\nОсь наші найактивніші спортсмени за минулий тиждень:\n\n"
+    medals = ["🥇", "🥈", "🥉"]
+    for i, (user_id, username, workout_count) in enumerate(top_users):
+        display_name = f"@{username}" if username else f"User {user_id}"
+        leaderboard_text += f"{medals[i]} {display_name} - **{workout_count}** тренувань\n"
+    leaderboard_text += "\nВітаємо лідерів та бажаємо всім продуктивного нового тижня!"
+    await send_message_safely(bot, int(GROUP_ID), leaderboard_text)
+
+async def remind_to_join_group(bot: Bot):
+    if not GROUP_INVITE_LINK: return
+    users_not_in_group = await db.get_users_not_in_group()
+    if not users_not_in_group: return
+
+    group_invite_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Приєднатись до спільноти", url=GROUP_INVITE_LINK)]
+    ])
+    reminder_text = "👋 Привіт! Нагадуємо, що у нас є закрита спільнота, де ви можете ділитися успіхами, брати участь у групових челенджах та отримувати додаткову мотивацію. Долучайтеся!"
+    for (user_id,) in users_not_in_group:
+        try:
+            await send_message_safely(bot, user_id, reminder_text, reply_markup=group_invite_kb)
+        except Exception as e:
+            print(f"Не вдалося надіслати нагадування про групу користувачу {user_id}: {e}")
+
+async def ask_daily_activity(bot: Bot):
+    users = await db.get_all_active_users()
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Пасивний 🧘", callback_data="set_activity:passive")
+    builder.button(text="Середній 🚶‍♂️", callback_data="set_activity:medium")
+    builder.button(text="Активний 🏋️", callback_data="set_activity:active")
+    builder.adjust(3)
+    
+    for user_id, *_ in users:
+        await send_message_safely(bot, user_id, "Доброго ранку! Який у вас сьогодні план на активність?", reply_markup=builder.as_markup())
+
+async def send_evening_summary(bot: Bot):
+    users = await db.get_all_active_users()
+    for user_id, *_ in users:
+        await send_daily_summary(user_id, bot)
 
 async def send_meal_reminders(bot: Bot):
     current_time = get_current_kyiv_time().strftime("%H:%M")
@@ -122,10 +195,21 @@ async def send_monthly_report(bot: Bot):
         except Exception as e:
             print(f"Не вдалося надіслати місячний звіт користувачу {user_id}: {e}")
 
+
+
+async def send_bedtime_reminder(bot: Bot):
+    users = await db.get_all_active_users()
+    text = "🌙 Пора лягати спати! Гарного відпочинку 😴"
+    for user_id, *_ in users:
+        try:
+            await send_message_safely(bot, user_id, text)
+        except Exception as e:
+            print(f"Не вдалося надіслати нагадування про сон користувачу {user_id}: {e}")
+
 def setup_scheduler(bot: Bot):
     scheduler = AsyncIOScheduler(timezone=KYIV_TZ)
 
-    scheduler.add_job(send_daily_reminder, 'cron', hour=23, minute=40, args=(bot,))
+    scheduler.add_job(send_daily_reminder, 'cron', hour=00, minute=10, args=(bot,))
     scheduler.add_job(ask_for_weekly_feedback, 'cron', day_of_week='sun', hour=19, minute=0, args=(bot,))
     scheduler.add_job(send_monthly_report, 'cron', day=1, hour=10, minute=0, args=(bot,))
     scheduler.add_job(post_weekly_leaderboard, 'cron', day_of_week='sun', hour=20, minute=0, args=(bot,))
@@ -138,3 +222,4 @@ def setup_scheduler(bot: Bot):
         scheduler.start()
 
     return scheduler
+
