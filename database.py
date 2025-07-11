@@ -1,8 +1,10 @@
 import aiosqlite
 import json
 from datetime import datetime, timedelta
+import pytz
 
 DB_NAME = 'fitness_bot.db'
+KYIV_TZ = pytz.timezone("Europe/Kiev")
 
 async def init_db():
     async with aiosqlite.connect(DB_NAME) as db:
@@ -138,6 +140,7 @@ async def add_user(user_id: int, username: str, full_name: str):
     async with aiosqlite.connect(DB_NAME) as db:
         cursor = await db.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
         if await cursor.fetchone() is None:
+            now = datetime.now(KYIV_TZ) # <--- ВИКОРИСТОВУЄМО КИЇВСЬКИЙ ЧАС
             trial_expiry = (datetime.now() + timedelta(days=7)).isoformat()
             await db.execute(
                 "INSERT INTO users (user_id, username, full_name, registration_date, subscription_status, subscription_expiry_date) VALUES (?, ?, ?, ?, 'trial', ?)",
@@ -233,7 +236,7 @@ async def get_user_achievements(user_id: int):
         return await cursor.fetchall()
 async def log_workout_completion(user_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("INSERT INTO progress (user_id, date) VALUES (?, ?)", (user_id, datetime.now().isoformat()))
+        await db.execute("INSERT INTO progress (user_id, date) VALUES (?, ?)", (user_id, datetime.now(KYIV_TZ).isoformat()))
         await db.commit()
 async def count_total_workouts(user_id: int) -> int:
     async with aiosqlite.connect(DB_NAME) as db:
@@ -387,7 +390,7 @@ async def get_user_results(user_id: int):
 async def check_workout_done_today(user_id: int) -> bool:
     """Перевіряє, чи користувач вже підтвердив тренування сьогодні."""
     async with aiosqlite.connect(DB_NAME) as db:
-        today_str = datetime.now().strftime('%Y-%m-%d')
+        today_str = datetime.now(KYIV_TZ).strftime('%Y-%m-%d')
         # Припускаємо, що created_at - це TEXT у форматі ISO
         cursor = await db.execute(
             "SELECT 1 FROM progress WHERE user_id = ? AND date(created_at) = ?",
