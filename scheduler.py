@@ -125,7 +125,7 @@ async def send_monthly_report(bot: Bot):
 def setup_scheduler(bot: Bot):
     scheduler = AsyncIOScheduler(timezone=KYIV_TZ)
 
-    scheduler.add_job(send_daily_reminder, 'cron', hour=23, minute=35, args=(bot,))
+    scheduler.add_job(send_daily_reminder, 'cron', hour=23, minute=40, args=(bot,))
     scheduler.add_job(ask_for_weekly_feedback, 'cron', day_of_week='sun', hour=19, minute=0, args=(bot,))
     scheduler.add_job(send_monthly_report, 'cron', day=1, hour=10, minute=0, args=(bot,))
     scheduler.add_job(post_weekly_leaderboard, 'cron', day_of_week='sun', hour=20, minute=0, args=(bot,))
