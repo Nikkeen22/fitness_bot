@@ -209,7 +209,7 @@ async def send_bedtime_reminder(bot: Bot):
 def setup_scheduler(bot: Bot):
     scheduler = AsyncIOScheduler(timezone=KYIV_TZ)
 
-    scheduler.add_job(send_daily_reminder, 'cron', hour=00, minute=10, args=(bot,))
+    scheduler.add_job(send_daily_reminder, 'cron', hour=7, minute=30, args=(bot,))
     scheduler.add_job(ask_for_weekly_feedback, 'cron', day_of_week='sun', hour=19, minute=0, args=(bot,))
     scheduler.add_job(send_monthly_report, 'cron', day=1, hour=10, minute=0, args=(bot,))
     scheduler.add_job(post_weekly_leaderboard, 'cron', day_of_week='sun', hour=20, minute=0, args=(bot,))
