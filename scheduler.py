@@ -7,12 +7,15 @@ import database as db
 import keyboards as kb
 import achievements
 from datetime import datetime, timedelta
+from pytz import timezone  # ✅ додано для підтримки часової зони
+
 from utils.safe_sender import send_message_safely
 from config import GROUP_ID, GROUP_INVITE_LINK
 from handlers.nutrition_handler import send_daily_summary
 import re
 
-# Словник для надійного перекладу днів тижня, незалежно від локалі системи
+KYIV_TZ = timezone("Europe/Kiev")  # ✅ Київська часова зона
+
 DAY_MAP = {
     "Monday": "Понеділок",
     "Tuesday": "Вівторок",
@@ -24,12 +27,8 @@ DAY_MAP = {
 }
 
 async def send_today_workout_for_user(user_id: int, bot: Bot, is_reminder: bool = False):
-    """
-    Знаходить та надсилає тренування на поточний день для одного конкретного користувача.
-    Може працювати як нагадування або як відповідь на запит.
-    """
     try:
-        today_english = datetime.now().strftime('%A')
+        today_english = datetime.now(KYIV_TZ).strftime('%A')  # ✅
         today_ukrainian = DAY_MAP.get(today_english)
 
         if not today_ukrainian:
@@ -44,7 +43,6 @@ async def send_today_workout_for_user(user_id: int, bot: Bot, is_reminder: bool 
                 await send_message_safely(bot, user_id, "У вас ще немає активного плану тренувань. Створіть його за допомогою команди /create_plan")
             return
 
-        # Використовуємо ваш надійний регулярний вираз
         pattern = re.compile(rf"\*\*{today_ukrainian}.*?\*\*([\s\S]*?)(?=\n\*\*|\Z)", re.IGNORECASE)
         match = pattern.search(plan)
 
@@ -69,7 +67,6 @@ async def send_today_workout_for_user(user_id: int, bot: Bot, is_reminder: bool 
                     )
                 await send_message_safely(bot, user_id, text, reply_markup=kb.confirm_workout_kb)
         else:
-            # Надсилаємо повідомлення "не знайдено" тільки якщо це відповідь на кнопку
             if not is_reminder:
                 generic_reminder = "Схоже, у вашому плані немає тренування на сьогодні. Можливо, це день відпочинку або план потребує оновлення."
                 await send_message_safely(bot, user_id, generic_reminder)
@@ -80,7 +77,6 @@ async def send_today_workout_for_user(user_id: int, bot: Bot, is_reminder: bool 
             await send_message_safely(bot, user_id, "Виникла помилка при спробі отримати ваше тренування.")
 
 async def send_daily_reminder(bot: Bot):
-    """Щоденна розсилка-нагадування про тренування."""
     users = await db.get_all_active_users()
     for user_id, *_ in users:
         await send_today_workout_for_user(user_id, bot, is_reminder=True)
@@ -103,12 +99,17 @@ async def send_monthly_report(bot: Bot):
 
             if not reg_date_str: continue
             reg_date = datetime.fromisoformat(reg_date_str)
-            if datetime.now() - reg_date > timedelta(days=30):
+            if datetime.now(KYIV_TZ) - reg_date > timedelta(days=30):  # ✅
                 await achievements.check_and_grant_achievement(user_id, 'marathoner', bot)
             
             total_workouts = await db.count_total_workouts(user_id)
             last_30_days = await db.count_workouts_last_n_days(user_id, 30)
-            report_text = (f"📅 **Ваш звіт за місяць!**\n\nВи чудово попрацювали! Ось ваша статистика:\n🔸 Тренувань за останній місяць: **{last_30_days}**\n🔸 Всього тренувань з ботом: **{total_workouts}**\n\nНовий місяць - нові вершини! Не зупиняйтесь!")
+            report_text = (
+                f"📅 **Ваш звіт за місяць!**\n\nВи чудово попрацювали! Ось ваша статистика:\n"
+                f"🔸 Тренувань за останній місяць: **{last_30_days}**\n"
+                f"🔸 Всього тренувань з ботом: **{total_workouts}**\n\n"
+                "Новий місяць - нові вершини! Не зупиняйтесь!"
+            )
             await send_message_safely(bot, user_id, report_text)
         except Exception as e:
             print(f"Не вдалося надіслати місячний звіт користувачу {user_id}: {e}")
@@ -133,7 +134,10 @@ async def remind_to_join_group(bot: Bot):
     group_invite_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Приєднатись до спільноти", url=GROUP_INVITE_LINK)]
     ])
-    reminder_text = "👋 Привіт! Нагадуємо, що у нас є закрита спільнота, де ви можете ділитися успіхами, брати участь у групових челенджах та отримувати додаткову мотивацію. Долучайтеся!"
+    reminder_text = (
+        "👋 Привіт! Нагадуємо, що у нас є закрита спільнота, де ви можете ділитися успіхами, брати участь у групових "
+        "челенджах та отримувати додаткову мотивацію. Долучайтеся!"
+    )
     for (user_id,) in users_not_in_group:
         try:
             await send_message_safely(bot, user_id, reminder_text, reply_markup=group_invite_kb)
@@ -157,7 +161,7 @@ async def send_evening_summary(bot: Bot):
         await send_daily_summary(user_id, bot)
 
 async def send_meal_reminders(bot: Bot):
-    current_time = datetime.now().strftime("%H:%M")
+    current_time = datetime.now(KYIV_TZ).strftime("%H:%M")  # ✅
     user_reminders = await db.get_all_user_reminders()
     
     for user_id, breakfast, lunch, dinner in user_reminders:
@@ -188,23 +192,19 @@ async def send_bedtime_reminder(bot: Bot):
         except Exception as e:
             print(f"Не вдалося надіслати нагадування про сон користувачу {user_id}: {e}")
 
-
 def setup_scheduler(bot: Bot):
-    scheduler = AsyncIOScheduler(timezone="Europe/Kiev")
+    scheduler = AsyncIOScheduler(timezone="Europe/Kiev")  # ✅ вже правильно
 
     scheduler.add_job(send_daily_reminder, 'cron', hour=7, minute=30, args=(bot,))
     scheduler.add_job(ask_for_weekly_feedback, 'cron', day_of_week='sun', hour=19, minute=0, args=(bot,))
     scheduler.add_job(send_monthly_report, 'cron', day=1, hour=10, minute=0, args=(bot,))
     scheduler.add_job(post_weekly_leaderboard, 'cron', day_of_week='sun', hour=20, minute=0, args=(bot,))
     scheduler.add_job(remind_to_join_group, 'cron', day_of_week='tue,fri', hour=12, minute=0, args=(bot,))
-   # scheduler.add_job(ask_daily_activity, 'cron', hour=20, minute=28, args=(bot,))
     scheduler.add_job(send_evening_summary, 'cron', hour=21, minute=30, args=(bot,))
     scheduler.add_job(send_meal_reminders, 'cron', minute='*', args=(bot,))
-    scheduler.add_job(send_bedtime_reminder, 'cron', hour=22, minute=00, args=(bot,))
-
+    scheduler.add_job(send_bedtime_reminder, 'cron', hour=22, minute=0, args=(bot,))
 
     if not scheduler.running:
         scheduler.start()
 
     return scheduler
-
