@@ -200,7 +200,7 @@ def setup_scheduler(bot: Bot):
    # scheduler.add_job(ask_daily_activity, 'cron', hour=20, minute=28, args=(bot,))
     scheduler.add_job(send_evening_summary, 'cron', hour=21, minute=30, args=(bot,))
     scheduler.add_job(send_meal_reminders, 'cron', minute='*', args=(bot,))
-    scheduler.add_job(send_bedtime_reminder, 'cron', hour=20, minute=42, args=(bot,))
+    scheduler.add_job(send_bedtime_reminder, 'cron', hour=22, minute=00, args=(bot,))
 
 
     if not scheduler.running:
