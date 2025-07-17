@@ -196,7 +196,8 @@ async def get_user_subscription_status(user_id: int):
             return status, None
 
         expiry = datetime.fromisoformat(expiry_str)
-        if status in ['trial', 'active'] and datetime.now() > expiry:
+        # ВИПРАВЛЕНО: Використовуємо aware datetime для порівняння
+        if status in ['trial', 'active'] and datetime.now(KYIV_TZ) > expiry:
             await db.execute("UPDATE users SET subscription_status = 'expired' WHERE user_id = ?", (user_id,))
             await db.commit()
             return 'expired', expiry
@@ -205,7 +206,8 @@ async def get_user_subscription_status(user_id: int):
 async def update_user_subscription(user_id: int, months: int):
     """Оновлює або продовжує підписку користувача."""
     status, expiry = await get_user_subscription_status(user_id)
-    start = datetime.now()
+    # ВИПРАВЛЕНО: Використовуємо aware datetime для порівняння
+    start = datetime.now(KYIV_TZ)
     if status == 'active' and expiry and expiry > start:
         start = expiry
     
