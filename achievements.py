@@ -22,19 +22,21 @@ async def check_and_grant_achievement(user_id: int, achievement_id: str, bot: Bo
         # Надсилаємо особисте повідомлення
         await send_message_safely(bot, user_id, f"🎉 **Нове досягнення!** 🎉\n\nВи отримали ачівку: **{achievement['name']}**\n_{achievement['description']}_")
 
-        # --- Стіна слави ---
-        if achievement_id in SIGNIFICANT_ACHIEVEMENTS and GROUP_ID:
+        # --- Повідомлення у спільноту ---
+        if GROUP_ID:
             try:
                 user_info = await bot.get_chat(user_id)
                 username = f"@{user_info.username}" if user_info.username else user_info.full_name
                 group_message = (
-                    f"🏆 **Стіна слави!** 🏆\n\n"
-                    f"Вітаємо {username} з отриманням досягнення **'{achievement['name']}'**!\n\n"
-                    f"Так тримати! Ваші успіхи надихають усю спільноту! 💪"
+                    f" <b>Нове досягнення!</b> \n\n"
+                    f"{username} отримав(ла) ачівку: <b>{achievement['name']}</b>\n"
+                    f"<i>{achievement['description']}</i>"
                 )
-                await send_message_safely(bot, int(GROUP_ID), group_message)
+                await send_message_safely(bot, int(GROUP_ID), group_message, parse_mode="HTML")
             except Exception as e:
-                print(f"Не вдалося відправити на Стіну слави: {e}")
+                import traceback
+                print(f"Не вдалося відправити у групу: {e}")
+                traceback.print_exc()
 
 
 async def check_workout_achievements(user_id: int, bot: Bot):

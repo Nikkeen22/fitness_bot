@@ -24,6 +24,7 @@ tools_menu_kb = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="⚖️ Калькулятор калорій", callback_data="tool_calories")],
     [InlineKeyboardButton(text="⏰ Налаштувати нагадування", callback_data="tool_reminders")],
     [InlineKeyboardButton(text="📖 Команди (Help)", callback_data="tool_help")],
+    [InlineKeyboardButton(text="Мій звіт про калорії", callback_data="tool_calories_report")],
 ])
 
 

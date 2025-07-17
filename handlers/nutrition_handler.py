@@ -8,12 +8,25 @@ import keyboards as kb
 from utils.safe_sender import answer_message_safely, send_message_safely
 import gemini
 import json
+from rapidfuzz import process
 
 router = Router()
 
 class NutritionStates(StatesGroup):
     waiting_for_meal_description = State()
     waiting_for_meal_confirmation = State()
+
+FOOD_DICT = {
+    "борщ": {"calories": 80, "proteins": 2, "fats": 3, "carbs": 10},
+    "каша з м'ясом": {"calories": 150, "proteins": 7, "fats": 5, "carbs": 20},
+    # ...інші страви...
+}
+
+def get_local_calories(description):
+    match, score, _ = process.extractOne(description, FOOD_DICT.keys())
+    if score > 80:
+        return FOOD_DICT[match]
+    return None
 
 # Обробка ручного додавання та з нагадувань
 @router.message(F.chat.type == "private", F.text == "🥑 Додати їжу")
@@ -30,11 +43,17 @@ async def start_meal_logging(event: Message | CallbackQuery, state: FSMContext):
 async def process_meal_description(message: Message, state: FSMContext, bot: Bot):
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     response_json_str = await gemini.analyze_meal(message.text)
-    
     try:
         meal_data = json.loads(response_json_str)
+        # Якщо Gemini не визначив калорійність, шукаємо у локальному словнику
+        if not meal_data.get('calories') or meal_data['calories'] in [0, "невідомо", None]:
+            local = get_local_calories(message.text)
+            if local:
+                meal_data['calories'] = local['calories']
+                meal_data['proteins'] = local['proteins']
+                meal_data['fats'] = local['fats']
+                meal_data['carbs'] = local['carbs']
         await state.update_data(meal_data=meal_data)
-        
         confirmation_text = (
             f"Я розпізнав вашу страву як **'{meal_data['meal_name']}'**.\n\n"
             f"Орієнтовна калорійність: **{meal_data['calories']} ккал**\n"
@@ -76,10 +95,19 @@ async def cancel_meal_logging(callback: CallbackQuery, state: FSMContext):
 async def get_summary_command(message: Message, bot: Bot):
     await send_daily_summary(message.from_user.id, bot)
 
+@router.message(Command("calories"), F.chat.type == "private")
+async def get_calories_command(message: Message, bot: Bot):
+    await send_daily_summary(message.from_user.id, bot)
+
+@router.callback_query(F.data == "tool_calories_report")
+async def show_calories_report_callback_from_tools(callback: CallbackQuery, bot: Bot):
+    await send_daily_summary(callback.from_user.id, bot)
+    await callback.answer()
+
 async def send_daily_summary(user_id: int, bot: Bot):
     summary_data = await db.get_daily_food_summary(user_id)
     if not summary_data:
-        # Не надсилаємо нічого, якщо користувач нічого не їв
+        await send_message_safely(bot, user_id, "Сьогодні ви ще не додавали інформацію про їжу.")
         return
 
     report_lines = ["**Ваш раціон за сьогодні:**\n"]
@@ -87,7 +115,18 @@ async def send_daily_summary(user_id: int, bot: Bot):
     
     for meal in summary_data:
         report_lines.append(f"- {meal[0]}: {meal[1]} ккал")
-        total_calories += meal[1]
+        try:
+            val = meal[1]
+            if isinstance(val, str) and "-" in val:
+                parts = val.replace("ккал", "").split("-")
+                nums = [int(p.strip()) for p in parts if p.strip().isdigit()]
+                if nums:
+                    avg = sum(nums) // len(nums)
+                    total_calories += avg
+            else:
+                total_calories += int(val)
+        except (ValueError, TypeError):
+            total_calories += 0
     
     # Тут логіка отримання спалених калорій та цілі
     # Для прикладу, використаємо заглушки

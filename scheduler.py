@@ -11,8 +11,12 @@ from utils.safe_sender import send_message_safely
 from config import GROUP_ID, GROUP_INVITE_LINK
 from handlers.nutrition_handler import send_daily_summary
 import re
+from aiogram.filters import Command
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery
 
-
+# Глобальний об'єкт scheduler для імпорту
+scheduler = None
 
 # Київська часова зона
 KYIV_TZ = pytz.timezone("Europe/Kiev")
@@ -133,6 +137,16 @@ async def remind_to_join_group(bot: Bot):
         except Exception as e:
             print(f"Не вдалося надіслати нагадування про групу користувачу {user_id}: {e}")
 
+
+async def send_bedtime_reminder(bot: Bot):
+    users = await db.get_all_active_users()
+    text = "🌙 Пора лягати спати! Гарного відпочинку 😴"
+    for user_id, *_ in users:
+        try:
+            await send_message_safely(bot, user_id, text)
+        except Exception as e:
+            print(f"Не вдалося надіслати нагадування про сон користувачу {user_id}: {e}")
+
 async def ask_daily_activity(bot: Bot):
     users = await db.get_all_active_users()
     builder = InlineKeyboardBuilder()
@@ -147,9 +161,18 @@ async def ask_daily_activity(bot: Bot):
 async def send_evening_summary(bot: Bot):
     users = await db.get_all_active_users()
     for user_id, *_ in users:
-        await send_daily_summary(user_id, bot)
+        try:
+            print(f"[LOG] Відправляю вечірній звіт користувачу {user_id}")
+            try:
+                await send_daily_summary(user_id, bot)
+                print(f"[LOG] Звіт успішно надіслано користувачу {user_id}")
+            except Exception as e:
+                print(f"[ERROR] send_daily_summary не вдалося для {user_id}: {e}")
+        except Exception as e:
+            print(f"[ERROR] Не вдалося надіслати вечірній звіт користувачу {user_id}: {e}")
 
 async def send_meal_reminders(bot: Bot):
+    """Нагадування про прийоми їжі для користувачів."""
     current_time = get_current_kyiv_time().strftime("%H:%M")
     user_reminders = await db.get_all_user_reminders()
 
@@ -172,40 +195,6 @@ async def send_meal_reminders(bot: Bot):
             except Exception as e:
                 print(f"Не вдалося надіслати нагадування про їжу {user_id}: {e}")
 
-async def send_monthly_report(bot: Bot):
-    users = await db.get_all_active_users()
-    for user_data in users:
-        try:
-            user_id = user_data[0]
-            reg_date_str = user_data[1] if len(user_data) > 1 else None
-            if not reg_date_str:
-                continue
-            reg_date = datetime.fromisoformat(reg_date_str)
-            if get_current_kyiv_time() - reg_date > timedelta(days=30):
-                await achievements.check_and_grant_achievement(user_id, 'marathoner', bot)
-            total_workouts = await db.count_total_workouts(user_id)
-            last_30_days = await db.count_workouts_last_n_days(user_id, 30)
-            report_text = (
-                f"📅 **Ваш звіт за місяць!**\n\nВи чудово попрацювали! Ось ваша статистика:\n"
-                f"🔸 Тренувань за останній місяць: **{last_30_days}**\n"
-                f"🔸 Всього тренувань з ботом: **{total_workouts}**\n\n"
-                f"Новий місяць — нові вершини! Не зупиняйтесь!"
-            )
-            await send_message_safely(bot, user_id, report_text)
-        except Exception as e:
-            print(f"Не вдалося надіслати місячний звіт користувачу {user_id}: {e}")
-
-
-
-async def send_bedtime_reminder(bot: Bot):
-    users = await db.get_all_active_users()
-    text = "🌙 Пора лягати спати! Гарного відпочинку 😴"
-    for user_id, *_ in users:
-        try:
-            await send_message_safely(bot, user_id, text)
-        except Exception as e:
-            print(f"Не вдалося надіслати нагадування про сон користувачу {user_id}: {e}")
-
 def setup_scheduler(bot: Bot):
     scheduler = AsyncIOScheduler(timezone=KYIV_TZ)
 
@@ -222,4 +211,57 @@ def setup_scheduler(bot: Bot):
         scheduler.start()
 
     return scheduler
+
+router = Router()
+
+# Кнопка для перегляду звіту калорій
+calories_report_kb = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="Мій звіт за сьогодні", callback_data="show_calories_report")]
+])
+
+# Команда для перегляду звіту калорій
+@router.message(Command("calories"), F.chat.type == "private")
+async def show_calories_report(message: Message):
+    calories_data = await db.get_today_calories(message.from_user.id)
+    if not calories_data:
+        await message.answer("Сьогодні ви ще не додавали інформацію про їжу або тренування.")
+        return
+
+    food_list = calories_data.get("food", [])
+    total_calories = calories_data.get("total", 0)
+    recommended = 2200
+
+    food_text = "\n".join([f"- {item['name']}: {item['calories']} ккал" for item in food_list])
+    report = (
+        f"Ваш раціон за сьогодні:\n\n"
+        f"{food_text}\n\n"
+        f"---\n"
+        f"🔥 Всього спожито: {total_calories} ккал\n"
+        f"Рекомендована норма: ~{recommended} ккал"
+    )
+    await message.answer(report)
+
+# Обробник для кнопки
+@router.callback_query(F.data == "show_calories_report")
+async def show_calories_report_callback(callback: CallbackQuery):
+    calories_data = await db.get_today_calories(callback.from_user.id)
+    if not calories_data:
+        await callback.message.answer("Сьогодні ви ще не додавали інформацію про їжу або тренування.")
+        await callback.answer()
+        return
+
+    food_list = calories_data.get("food", [])
+    total_calories = calories_data.get("total", 0)
+    recommended = 2200
+
+    food_text = "\n".join([f"- {item['name']}: {item['calories']} ккал" for item in food_list])
+    report = (
+        f"Ваш раціон за сьогодні:\n\n"
+        f"{food_text}\n\n"
+        f"---\n"
+        f"🔥 Всього спожито: {total_calories} ккал\n"
+        f"Рекомендована норма: ~{recommended} ккал"
+    )
+    await callback.message.answer(report)
+    await callback.answer()
 

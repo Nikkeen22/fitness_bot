@@ -9,6 +9,8 @@ from config import ADMIN_ID, PAYMENT_CARD_NUMBER
 from utils.safe_sender import answer_message_safely, send_message_safely
 import random
 from datetime import datetime
+import logging
+from aiogram.filters import Command, StateFilter, or_f
 
 router = Router()
 
@@ -23,28 +25,52 @@ async def cmd_help(message: Message):
         "**Спільнота та Челенджі (тільки в приватних повідомленнях):**\n"
         "/challenges - Переглянути та приєднатись до викликів\n"
         "/create_challenge - Створити публічний виклик\n"
-        "/duel @username <опис> - Кинути виклик іншому учаснику\n\n"
+        "/duel @username <опис> - Кинути виклик іншому учаснику\n"
+        
         "**Додаткові утиліти:**\n"
         "/food - Отримати рецепт з продуктів\n"
-        "/tip - Отримати корисну пораду\n\n"
+        "/tip - Отримати корисну пораду\n"
+        "/calories - Переглянути звіт про калорії\n\n"
         "**Підписка:**\n"
         "/subscribe - Керування підпискою\n\n"
         "**Інше:**\n"
         "/cancel - Скасувати поточну дію"
     )
     if str(message.from_user.id) == ADMIN_ID:
-        help_text += "\n\n**Адмін-команди:**\n/grant <user_id> - Надати довічний доступ"
+        help_text += "\n\n**Адмін-команди:**\n/grant <user_id> - Надати довічний доступ\n\n"
+        help_text += "/delete_challenge id - Видалити челендж (адмін)\n\n"
+        help_text += "/check_jobs - Покаже вам список усіх завдань (адмін)\n\n"
     await answer_message_safely(message, help_text)
 
-# ... (решта файлу без змін, але без /start та /newplan)
-@router.message(F.text.casefold() == "скасувати", Command("cancel"))
+@router.message(
+    or_f(Command("cancel"), F.text.casefold() == "скасувати"),
+    StateFilter("*")
+)
 async def cmd_cancel(message: Message, state: FSMContext):
+    """
+    Обробник, що дозволяє користувачу скасувати будь-яку
+    поточну дію (вийшовши зі стану FSM).
+    """
     current_state = await state.get_state()
     if current_state is None:
-        await message.answer("Немає активних дій для скасування.")
+        await message.answer(
+            "Немає активних дій для скасування.",
+            reply_markup=kb.main_menu_kb
+        )
         return
+
+    # Логування для відладки
+    logging.info(f"Скасування стану {current_state} для користувача {message.from_user.id}")
+    
+    # Очищуємо стан
     await state.clear()
-    await message.answer("Дію скасовано.")
+    
+    # Відповідаємо користувачу і показуємо головне меню
+    await message.answer(
+        "Дію скасовано.",
+        reply_markup=kb.main_menu_kb
+    )
+
 @router.message(Command("myplan"))
 async def cmd_myplan(message: Message):
     plan = await db.get_user_plan(message.from_user.id)

@@ -1,3 +1,14 @@
+async def is_admin(user_id: int) -> bool:
+    # Перевірка по ADMIN_ID з .env
+    import os
+    admin_id = os.getenv("ADMIN_ID")
+    if admin_id is None:
+        try:
+            from config import ADMIN_ID as config_admin_id
+            admin_id = str(config_admin_id)
+        except Exception:
+            return False
+    return str(user_id) == str(admin_id)
 import aiosqlite
 import json
 from datetime import datetime, timedelta
@@ -269,6 +280,7 @@ async def create_public_challenge(author_id: int, title: str, description: str, 
             (author_id, title, description, duration, datetime.now().isoformat())
         )
         await db.commit()
+        return cursor.lastrowid
 
 async def set_meal_reminders(user_id: int, breakfast: str, lunch: str, dinner: str):
     async with aiosqlite.connect(DB_NAME) as db:
@@ -403,3 +415,8 @@ async def get_daily_activity(user_id: int) -> str | None:
         cursor = await db.execute("SELECT daily_activity_level FROM users WHERE user_id = ?", (user_id,))
         row = await cursor.fetchone()
         return row[0] if row else None
+
+async def delete_challenge(challenge_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("DELETE FROM public_challenges WHERE id = ?", (challenge_id,))
+        await db.commit()

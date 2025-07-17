@@ -9,9 +9,34 @@ import achievements
 import keyboards as kb
 from utils.safe_sender import answer_message_safely
 from scheduler import send_today_workout_for_user
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 
 router = Router()
+
+
+@router.message(Command("check_jobs"), F.chat.type == "private")
+async def check_scheduled_jobs(message: Message, scheduler: AsyncIOScheduler):
+    """
+    Команда для адміна, що показує всі заплановані завдання.
+    """
+    if not await db.is_admin(message.from_user.id):
+        return
+
+    jobs = scheduler.get_jobs()
+    if not jobs:
+        await message.answer("Наразі немає запланованих завдань.")
+        return
+
+    response_text = "<b>Заплановані завдання:</b>\n\n"
+    for job in jobs:
+        response_text += (
+            f"🔹 <b>ID:</b> <code>{job.id}</code>\n"
+            f"   - <b>Наступний запуск:</b> {job.next_run_time.strftime('%Y-%m-%d %H:%M:%S %Z')}\n"
+            f"   - <b>Функція:</b> {job.func.__name__}\n\n"
+        )
+        
+    await message.answer(response_text)
 
 class UserActionStates(StatesGroup):
     waiting_for_products = State()

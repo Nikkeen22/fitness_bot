@@ -14,7 +14,10 @@ async def set_bot_commands(bot: Bot):
         BotCommand(command="tip", description="Корисна порада"),
         BotCommand(command="subscribe", description="Керування підпискою"),
         BotCommand(command="cancel", description="Скасувати поточну дію"),
+        BotCommand(command="calories", description="Переглянути звіт про калорії"),
         BotCommand(command="help", description="Перелік доступних команд"),
+
+
     ]
     
     # Підказки доступні лише в особистих чатах
