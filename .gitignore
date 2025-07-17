@@ -1,1 +1,12 @@
+# .gitignore
+
+# Virtualenv
+venv/
+__pycache__/
+*.pyc
+
+# Environment variables
 .env
+
+# Додайте цей рядок для ігнорування бази даних
+fitness_bot.db
