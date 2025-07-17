@@ -299,25 +299,44 @@ async def process_video_confirmation(message: Message, state: FSMContext, bot: B
     data = await state.get_data()
     proof_type = data.get("proof_type")
     await state.clear()
+
     await message.answer("✅ Відео отримано! Ваш доказ опубліковано в групі.", reply_markup=kb.main_menu_kb)
+
     if GROUP_ID:
         username = f"@{message.from_user.username}" if message.from_user.username else message.from_user.full_name
+        caption_text = "" # Створимо змінну для підпису до відео
+
         if proof_type == 'challenge':
             challenge_id = data.get("challenge_id")
             await db.update_challenge_progress(message.from_user.id, challenge_id)
-            group_post = f"🏆 **Прогрес у челенджі!**\nКористувач {username} ділиться своїм успіхом!"
+            # Отримаємо назву челенджу для більшої інформативності
+            challenge_details = await db.get_public_challenge_details(challenge_id)
+            challenge_title = challenge_details[2] if challenge_details else "невідомого челенджу"
+            caption_text = f"🏆 **Прогрес у челенджі!**\n\nКористувач {username} ділиться своїм успіхом у виклику «{challenge_title}»!"
+
         elif proof_type == 'duel':
             duel_id = data.get("duel_id")
             await db.mark_duel_completed(message.from_user.id, duel_id)
             duel = await db.get_duel_by_id(duel_id)
-            if duel and duel['initiator_completed'] and duel['opponent_completed']:
+            # Перевірка, чи дуель завершена обома учасниками
+            if duel and duel.get('initiator_completed') and duel.get('opponent_completed'):
                 await db.update_duel_status(duel_id, 'completed')
-            group_post = f"🤺 **Прогрес у дуелі!**\nУчасник {username} виконав завдання!"
-        else:
-            group_post = f"🏆 **Підтвердження виконання!**\nКористувач {username} ділиться своїм прогресом!"
-        await send_message_safely(bot, int(GROUP_ID), group_post)
-        await bot.forward_message(chat_id=int(GROUP_ID), from_chat_id=message.chat.id, message_id=message.message_id)
+            caption_text = f"🤺 **Прогрес у дуелі!**\n\nУчасник {username} виконав завдання!"
 
+        else:
+            caption_text = f"🏆 **Підтвердження виконання!**\n\nКористувач {username} ділиться своїм прогресом!"
+
+        # Надійно відправляємо відео з підписом в групу
+        try:
+            await bot.send_video(
+                chat_id=int(GROUP_ID),
+                video=message.video.file_id,
+                caption=caption_text,
+                parse_mode="HTML" # Якщо використовуєте форматування в тексті
+            )
+        except Exception as e:
+            print(f"Помилка при відправці відео в групу: {e}")
+            # Можна додати сповіщення адміністратору про помилку
 @router.message(Command("delete_challenge"), F.chat.type == "private")
 async def delete_challenge_command(message: Message):
     if not await db.is_admin(message.from_user.id):
