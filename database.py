@@ -11,7 +11,7 @@ KYIV_TZ = pytz.timezone("Europe/Kiev")
 # --- Ініціалізація та структура БД ---
 
 async def init_db():
-    """Створює всі необхідні таблиці в базі даних, якщо вони не існують."""
+    """Створює всі необхідні таблиці та виконує міграції, якщо потрібно."""
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("PRAGMA foreign_keys = ON")
         
@@ -117,6 +117,18 @@ async def init_db():
                 FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
             )''')
         
+        # --- Проста міграція для таблиці duels ---
+        cursor = await db.execute("PRAGMA table_info(duels)")
+        columns = [row[1] for row in await cursor.fetchall()]
+        
+        if 'initiator_completed' not in columns:
+            print("Виконую міграцію: додаю колонку 'initiator_completed' до таблиці 'duels'.")
+            await db.execute("ALTER TABLE duels ADD COLUMN initiator_completed BOOLEAN DEFAULT FALSE")
+        
+        if 'opponent_completed' not in columns:
+            print("Виконую міграцію: додаю колонку 'opponent_completed' до таблиці 'duels'.")
+            await db.execute("ALTER TABLE duels ADD COLUMN opponent_completed BOOLEAN DEFAULT FALSE")
+        
         await db.commit()
 
 # --- Робота з користувачами ---
@@ -196,7 +208,6 @@ async def get_user_subscription_status(user_id: int):
             return status, None
 
         expiry = datetime.fromisoformat(expiry_str)
-        # ВИПРАВЛЕНО: Використовуємо aware datetime для порівняння
         if status in ['trial', 'active'] and datetime.now(KYIV_TZ) > expiry:
             await db.execute("UPDATE users SET subscription_status = 'expired' WHERE user_id = ?", (user_id,))
             await db.commit()
@@ -206,7 +217,6 @@ async def get_user_subscription_status(user_id: int):
 async def update_user_subscription(user_id: int, months: int):
     """Оновлює або продовжує підписку користувача."""
     status, expiry = await get_user_subscription_status(user_id)
-    # ВИПРАВЛЕНО: Використовуємо aware datetime для порівняння
     start = datetime.now(KYIV_TZ)
     if status == 'active' and expiry and expiry > start:
         start = expiry
@@ -300,11 +310,17 @@ async def update_challenge_progress(user_id: int, challenge_id: int):
         await db.commit()
 
 async def delete_challenge(challenge_id: int):
-    """Видаляє челендж та всіх його учасників."""
+    """
+    Видаляє челендж та всіх його учасників.
+    Спочатку видаляє учасників, потім сам челендж для надійності.
+    """
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("PRAGMA foreign_keys = ON")
+        await db.execute("DELETE FROM challenge_participants WHERE challenge_id = ?", (challenge_id,))
         await db.execute("DELETE FROM public_challenges WHERE id = ?", (challenge_id,))
         await db.commit()
+        print(f"Challenge {challenge_id} and its participants have been deleted from the database.")
+
 
 # --- Робота з дуелями ---
 
