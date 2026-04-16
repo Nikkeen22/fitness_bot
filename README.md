@@ -1,74 +1,66 @@
-🏋️‍♂️ Fitness Telegram Bot with Gemini AI
+# 🏋️‍♂️ Fitness Telegram Bot with Gemini AI
 
-Професійний Telegram-бот для автоматизації фітнес-процесів, мотивації та розумних консультацій за допомогою штучного інтелекту.
+Професійний Telegram-бот для автоматизації фітнес-процесів, мотивації та отримання розумних консультацій через ШІ.
 
-🌟 Ключові можливості
+---
 
-🤖 AI Coaching: Інтеграція з Google Gemini AI для персоналізованих відповідей на питання про тренування та дієту.
+### 🌟 Ключові можливості
 
-🏆 Гейміфікація: Система досягнень (achievements.py) та щоденні челенджі (challenges.py) для підтримки азарту.
+* **🤖 AI Coaching:** Інтеграція з **Google Gemini AI** для персоналізованих відповідей на питання про тренування та дієту.
+* **🏆 Гейміфікація:** Власна система досягнень (`achievements.py`) та щоденні челенджі (`challenges.py`) для підтримки мотивації.
+* **📅 Розумний розклад:** Автоматичні нагадування про активність та звіти за допомогою `APScheduler`.
+* **⚙️ Модульна архітектура:** Чіткий розподіл на хендлери, мідлварі та утиліти (Asynchronous OOP).
+* **📊 Облік прогресу:** Збереження та відстеження статистики користувача через базу даних.
 
-📅 Розумний розклад: Автоматичні нагадування про активність за допомогою APScheduler.
+---
 
-⚙️ Модульна архітектура: Чіткий розподіл на хендлери, мідлварі та утиліти, що полегшує підтримку та розширення коду.
+### 🛠 Технологічний стек
 
-📊 Облік прогресу: Відстеження статистики користувача в реальному часі.
+* **Core:** Python 3.10+
+* **Framework:** [aiogram 3.x](https://docs.aiogram.dev/)
+* **AI Engine:** Google Generative AI (Gemini API)
+* **Database:** SQLite / SQLAlchemy
+* **Automation:** APScheduler
+* **Deployment:** Підтримка Docker та Heroku (наявність Procfile)
 
-🛠 Технологічний стек
+---
 
-Core: Python 3.10+
+### 🚀 Швидкий запуск
 
-Framework: aiogram 3.x (Asynchronous OOP)
-
-AI Engine: Google Generative AI (Gemini API)
-
-Database: SQLite / SQLAlchemy
-
-Automation: APScheduler
-
-Deployment: Підтримка Docker та Heroku (наявність Procfile)
-
-🚀 Швидкий запуск
-
-Клонуйте проєкт:
-
-git clone [https://github.com/Nikkeen22/fitness_bot.git](https://github.com/Nikkeen22/fitness_bot.git)
-cd fitness_bot
-
-
+1. **Клонуйте проєкт:**
+   ```bash
+   git clone [https://github.com/Nikkeen22/fitness_bot.git](https://github.com/Nikkeen22/fitness_bot.git)
+   cd fitness_bot
 Встановіть залежності:
 
+Bash
 pip install -r requirements.txt
-
-
 Налаштуйте змінні оточення:
-Створіть файл .env та додайте ваші ключі (не завантажуйте цей файл на GitHub!):
+Створіть файл .env у кореневій папці проєкту:
 
+Фрагмент коду
 BOT_TOKEN=ваш_токен_від_botfather
 GEMINI_API_KEY=ваш_ключ_від_google_ai
-
-
 Запустіть бота:
 
+Bash
 python main.py
-
-
 📂 Структура репозиторію
+handlers/ — обробка команд та повідомлень користувача.
 
-handlers/ — логіка взаємодії з користувачем.
+middlewares/ — проміжне ПЗ для обробки запитів.
 
-middlewares/ — фільтрація та попередня обробка запитів.
+utils/ — допоміжні скрипти та інтеграція з Gemini AI.
 
-utils/ — допоміжні скрипти та логіка Gemini AI.
+database/ — моделі даних та робота з БД.
 
-database/ — схеми таблиць та робота з даними.
-
-scheduler.py — логіка фонових завдань.
+scheduler.py — логіка фонових та запланованих завдань.
 
 👨‍💻 Автор
-
 Микола Тихоненко
 
 Портфоліо: nikkeen-portfolio.vercel.app
 
 GitHub: @Nikkeen22
+
+Спеціалізація: Python / Django / Mobile Development
